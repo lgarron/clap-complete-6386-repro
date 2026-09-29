@@ -1,35 +1,85 @@
-mod args;
-mod commands;
-mod common;
+use std::io::stdout;
+use std::process::exit;
 
-use args::get_args;
-use commands::boilerplate::boilerplate as boilerplate_command;
-use commands::publish::publish_command;
-use commands::setup::setup_command;
-use commands::vcs::vcs_command;
-use commands::version::version_command;
-use commands::workspace::workspace_command;
-use shadow_rs::shadow;
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::generator::generate;
+use clap_complete::{Generator, Shell};
 
-use crate::commands::dependencies::dependencies_command;
-use crate::commands::print_schema::print_schema;
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+#[clap(name = "repo")]
+pub(crate) struct RepoArgs {
+    #[command(subcommand)]
+    pub command: RepoCommand,
+}
 
-shadow!(build);
+#[derive(Args, Debug)]
+pub(crate) struct BoilerplateArgs {
+    #[command(subcommand)]
+    command: BoilerplateCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum BoilerplateCommand {
+    Biome(TemplateFileArgs),
+    RustToolchain(TemplateFileArgs),
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct TemplateFileArgs {
+    #[clap(long)]
+    test_option: bool,
+    #[command(subcommand)]
+    pub(crate) command: TemplateFileCommand,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum TemplateFileCommand {
+    Add(TemplateFileCreateArgs),
+    Edit,
+    Reveal,
+}
+
+#[derive(Args, Clone, Debug)]
+pub(crate) struct TemplateFileCreateArgs {
+    #[clap(long)]
+    overwrite: bool,
+}
+
+#[derive(Args, Clone, Debug)]
+pub(crate) struct BlankArgs {}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum RepoCommand {
+    /// Set up boilerplate for the repo.
+    Boilerplate(BoilerplateArgs),
+    /// Print completions for the given shell.
+    Completions(CompletionsArgs),
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct CompletionsArgs {
+    /// Print completions for the given shell.
+    /// These can be loaded/stored permanently (e.g. when using Homebrew), but they can also be sourced directly, e.g.:
+    ///
+    ///  repo completions fish | source # fish
+    ///  source <(repo completions zsh) # zsh
+    #[clap(verbatim_doc_comment, id = "SHELL")]
+    shell: Shell,
+}
+
+fn completions_for_shell(cmd: &mut clap::Command, generator: impl Generator) {
+    generate(generator, cmd, "test_command", &mut stdout());
+}
 
 fn main() {
-    let args = get_args();
+    let mut command = RepoArgs::command();
 
-    match args.command {
-        args::RepoCommand::Version(version_args) => version_command(version_args),
-        args::RepoCommand::Publish(publish_args) => publish_command(publish_args),
-        args::RepoCommand::Boilerplate(boilerplate_args) => boilerplate_command(boilerplate_args),
-        args::RepoCommand::Setup(setup_args) => setup_command(setup_args),
-        args::RepoCommand::Vcs(vcs_args) => vcs_command(vcs_args).unwrap(),
-        args::RepoCommand::Workspace(workspace_args) => workspace_command(workspace_args),
-        args::RepoCommand::Dependencies(dependencies_args) => {
-            dependencies_command(dependencies_args).unwrap()
-        }
-        args::RepoCommand::PrintSchema(print_schema_args) => print_schema(print_schema_args),
-        args::RepoCommand::Completions(_) => panic!("We should have exited earlier."),
-    }
+    let args = RepoArgs::parse();
+    if let RepoCommand::Completions(completions_args) = args.command {
+        completions_for_shell(&mut command, completions_args.shell);
+        exit(0);
+    };
+
+    // Actual arg handling would go here.
 }
